@@ -1,0 +1,254 @@
+package matunagachihiro.spiritaway.com.example.imagesyntheticapplication;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.Toast;
+
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.LoadAdError;
+import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+
+import java.io.IOException;
+import java.io.OutputStream;
+
+public class MainActivity extends AppCompatActivity {
+    ImageView imageView ;
+    ImageView imageView1;
+    BitmapIO bitIO = new BitmapIO();
+    int isImported = 0; //importButtonのフラグ
+    Bitmap mutableBitmap;
+
+    InterstitialAd mInterstitialAd;
+    AdRequest adRequest;
+    int reloadCount = 0;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        imageView = findViewById(R.id.imageView3);
+        imageView1 = findViewById(R.id.image1);
+
+        bitIO.setBitmap(((BitmapDrawable)imageView.getDrawable()).getBitmap());
+
+
+        //バナー広告表示
+        MobileAds.initialize(this,
+                initializationStatus -> {
+                });
+
+        //AdRequest
+        reloadCount = 0;
+        AdView adView = findViewById(R.id.adView);
+        adRequest = new AdRequest.Builder().build();
+        adView.loadAd(adRequest);
+        adView.setAdListener(new AdListener() {
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                super.onAdFailedToLoad(loadAdError);
+                if(reloadCount < 5) {
+                    reloadCount++;
+                    Log.d("mainbanner","errorcode = " + loadAdError.getCode() + "\nreloaded ad = " + reloadCount
+                            + "\n" +loadAdError.getMessage());
+                    new Handler().postDelayed(() -> adView.loadAd(adRequest), 2000);
+                }
+            }
+        });
+
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        reloadCount = 0;
+        loadInterstitial(adRequest);
+    }
+
+    public void loadInterstitial(AdRequest adRe){
+
+        InterstitialAd.load(this,
+                "ca-app-pub-2742833893230662/3505679287",
+                adRe,
+                new InterstitialAdLoadCallback() {
+                    @Override
+                    public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                        // The mInterstitialAd reference will be null until an ad is loaded.
+                        mInterstitialAd = interstitialAd;
+                    }
+
+                    @Override
+                    public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                        // Handle the error
+                        mInterstitialAd = null;
+                        Log.d("maininterstitial","errorcode = " + loadAdError.getCode() + "\nreloaded ad = " + reloadCount
+                                + "\n" +loadAdError.getMessage());
+                        if(reloadCount < 5) {
+                            new Handler().postDelayed(() ->  loadInterstitial(adRe), 2000);
+                        }
+                    }
+                });
+    }
+
+
+    public void saveButton(View v){
+        final String[] items = {"JPEG", "PNG"};
+        new AlertDialog.Builder(this)
+                .setTitle("保存する画像のタイプを選択してください")
+                .setItems(items, (dialog, which) -> {
+                    // item_which pressed
+                    if(which == 0){
+                        bitIO.setType(true);
+                        createFile();
+                    }else{
+                        bitIO.setType(false);
+                        createFile();
+                    }
+
+                    //インタースティシャル広告の表示
+                    bitIO.addAdCount();
+                    if(bitIO.getAdcount()){
+                        showInterstitial();
+                    }
+                })
+                .show();
+    }
+
+    public void showInterstitial(){
+        if (mInterstitialAd != null) {
+            mInterstitialAd.show(MainActivity.this);
+        } else {
+            Toast.makeText(MainActivity.this,
+                    "広告の読み込みに失敗しました。", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void createFile() {
+        String fileName;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+
+        if(bitIO.isType()) {
+            fileName = "pic.jpeg";
+            intent.setType("image/jpeg");
+        }else{
+            fileName = "pic.png";
+            intent.setType("image/png");
+        }
+
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+
+        activityResultLauncher.launch(intent);
+    }
+
+    private final ActivityResultLauncher<Intent> activityResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if ( result.getResultCode() == Activity.RESULT_OK) {
+                    if (result.getData() != null) {
+                        //結果を受け取った後の処理
+                        Intent resultData = result.getData();
+                        Uri uri = resultData.getData();
+                        try(OutputStream outputStream =
+                                    getContentResolver().openOutputStream(uri)) {
+                            if(outputStream != null){
+                                if(bitIO.isType()){
+                                    bitIO.convertJPEG(mutableBitmap, outputStream);
+                                }else{
+                                    bitIO.convertPNG(mutableBitmap, outputStream);
+                                }
+                            }
+
+                        } catch(Exception e){
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            });
+
+    ActivityResultLauncher<Intent> _launcherSelectSingleImage = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    Intent resultData = result.getData();
+                    if (resultData != null) {
+                        Uri uri = resultData.getData();
+                        try {
+                            Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
+                            bitIO.setBitmap(bitmap);
+                            //ここにデータが保存される
+
+                            if(isImported == 0){
+                                imageView.setImageBitmap(bitIO.getBitmap());
+                                isImported = 1;
+                            }else if(isImported == 1){
+                                imageView1.setImageBitmap(bitIO.getBitmap());
+                                imageView1.setVisibility(View.VISIBLE);
+                                isImported = 2;
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            });
+
+    public void getImage() {  //画像をアルバムから取得するメソッド
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+        Intent chooserIntent = Intent.createChooser(intent, "画像を選択してください");
+
+        _launcherSelectSingleImage.launch(chooserIntent);
+    }
+
+    public void importButton(View v){
+        getImage();
+    }
+
+    public void syntheticImages(){ //画像を合成するメソッド
+        if(isImported == 2) {
+            mutableBitmap = bitIO.getBitmap().copy(Bitmap.Config.ARGB_8888, true);
+            Canvas offScreen = new Canvas(mutableBitmap);
+            Bitmap bitmap1 = ((BitmapDrawable) imageView.getDrawable()).getBitmap();
+            Bitmap bitmap2 = ((BitmapDrawable) imageView1.getDrawable()).getBitmap();
+            offScreen.drawBitmap(bitmap1, imageView.getImageMatrix(), null);
+            offScreen.drawBitmap(bitmap2, imageView1.getImageMatrix(), null);
+            bitIO.setBitmap(mutableBitmap);
+        }else{
+            Toast toast = Toast.makeText(this, "2枚の画像をインポートしてください", Toast.LENGTH_LONG);
+            toast.show();
+        }
+    }
+
+    public void SynthButton(View v){
+        syntheticImages();
+    }
+
+    public void goPrivacyActivity (View v){
+        Intent intent = new Intent(this,PrivacyActivity.class);
+        startActivity(intent);
+    }
+}

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">ImageSyntheticApplication</string>
+    <string name="text">プライバシーポリシーは<a href="https://www.dropbox.com/s/f0gr76uxxh382z9/%E7%94%
+    BB%E5%83%8F%E5%90%88%E6%88%90%E3%80%80%EF%BD%9E2%E6%9E%9A%E3%81%AE%E7%94%BB%E5%83%8F%E3%82%92%E5
+    %90%88%E6%88%90%E3%81%99%E3%82%8B%E3%82%A2%E3%83%97%E3%83%AA%EF%BD%9E%E3%80%80Privacy%20Policy.pdf?dl=0">
+        こちら</a></string>
+</resources>
